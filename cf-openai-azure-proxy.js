@@ -26,6 +26,8 @@ async function handleRequest(request) {
     var path="chat/completions"
   } else if (url.pathname === '/v1/completions') {
     var path="completions"
+  } else if (url.pathname === '/v1/images/generations') {
+    return createImg(request)
   } else if (url.pathname === '/v1/models') {
     return handleModels(request)
   } else {
@@ -164,5 +166,66 @@ async function handleOPTIONS(request) {
         'Access-Control-Allow-Headers': '*'
       }
     })
+}
+async function createImg(request, apiKey = null) {
+
+  const apiVersion = "2022-08-03-preview";
+  const url = `https://${resourceName}.openai.azure.com/dalle/text-to-image?api-version=${apiVersion}`;
+  const authKey = request.headers.get('Authorization');
+  if (!authKey) {
+    return new Response("Not allowed", {
+      status: 403
+    });
+  }
+  apiKey = authKey.replace('Bearer ', '');
+  const headers = { "api-key": apiKey, "Content-Type": "application/json" };
+  let body;
+  if (request.method === 'POST') {
+    body = await request.json();
+  }
+  const prompt = body?.prompt;  
+  const size = body?.size;  
+
+  try {
+    const body = {
+      caption: prompt,
+      resolution: size,
+    };
+    const submission = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+    const operationLocation = submission.headers.get("Operation-Location");
+    const retryAfter = submission.headers.get("Retry-after");
+    let status = "";
+    let imageUrl = "";
+    while (status !== "Succeeded") {
+      console.log(`waiting for image create..., ${status}, retry after ${retryAfter} seconds`);
+      await new Promise((resolve) => setTimeout(resolve, parseInt(retryAfter) * 1000));
+      const response = await fetch(operationLocation, { headers });
+      var responseData = await response.json();
+      status = responseData.status;
+    }
+    imageUrl = responseData.result.contentUrl;
+    
+    console.log(`create image success imageUrl: ${imageUrl}`);
+    //image_url = response["data"][0]["url"]
+    const data = {
+      "data": []  
+    };
+    data.data.push({
+      "url": imageUrl
+    });  
+    const json = JSON.stringify(data, null, 2);
+    return new Response(json, {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    console.error(`create image error: ${error}`);
+    return new Response(`图片生成失败:${error}`, {
+      status: 403
+    });
+  }
 }
 
