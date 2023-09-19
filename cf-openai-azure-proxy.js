@@ -26,6 +26,8 @@ async function handleRequest(request) {
     var path="chat/completions"
   } else if (url.pathname === '/v1/completions') {
     var path="completions"
+  } else if (url.pathname === '/v1/embeddings') {
+    var path="embeddings"
   } else if (url.pathname === '/v1/images/generations') {
     return createImg(request)
   } else if (url.pathname === '/v1/models') {
